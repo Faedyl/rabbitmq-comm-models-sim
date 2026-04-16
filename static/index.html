@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulasi Model Komunikasi Terdistribusi</title>
+<style>
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --border: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+    --green: #4ade80; --orange: #fb923c; --purple: #a78bfa;
+    --red: #f87171; --yellow: #fbbf24;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  h1 { text-align:center; padding:24px; font-size:1.6rem; background:var(--surface); border-bottom:1px solid var(--border); }
+  h1 span { color:var(--accent); }
+
+  .tabs { display:flex; justify-content:center; gap:8px; padding:16px; background:var(--surface); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .tab { padding:10px 24px; border:1px solid var(--border); border-radius:8px; cursor:pointer; background:transparent; color:var(--muted); font-size:0.95rem; transition:all .2s; }
+  .tab:hover { border-color:var(--accent); color:var(--text); }
+  .tab.active { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:600; }
+
+  .panel { display:none; max-width:1100px; margin:24px auto; padding:0 16px; }
+  .panel.active { display:block; }
+
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px; }
+  .card h2 { font-size:1.15rem; margin-bottom:12px; color:var(--accent); }
+  .card h3 { font-size:1rem; margin:12px 0 8px; color:var(--green); }
+
+  .form-row { display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+  .form-group { display:flex; flex-direction:column; flex:1; min-width:180px; }
+  .form-group label { font-size:0.8rem; color:var(--muted); margin-bottom:4px; }
+  .form-group input, .form-group select { padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.9rem; }
+  .form-group input:focus, .form-group select:focus { outline:none; border-color:var(--accent); }
+
+  .btn { padding:10px 20px; border-radius:8px; border:none; cursor:pointer; font-size:0.9rem; font-weight:600; transition:all .2s; }
+  .btn-primary { background:var(--accent); color:var(--bg); }
+  .btn-primary:hover { filter:brightness(1.1); }
+  .btn-green { background:var(--green); color:var(--bg); }
+  .btn-orange { background:var(--orange); color:var(--bg); }
+  .btn-purple { background:var(--purple); color:var(--bg); }
+  .btn-red { background:var(--red); color:var(--bg); }
+  .btn-sm { padding:6px 14px; font-size:0.8rem; }
+  .btn-group { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+
+  /* Canvas visualisasi */
+  .canvas-wrap { background:var(--bg); border:1px solid var(--border); border-radius:8px; margin:12px 0; overflow:hidden; }
+  canvas { display:block; width:100%; }
+
+  /* Log area */
+  .log-area { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px; max-height:300px; overflow-y:auto; font-family:'Cascadia Code','Fira Code',monospace; font-size:0.82rem; line-height:1.6; }
+  .log-area::-webkit-scrollbar { width:6px; }
+  .log-area::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  .log-entry { padding:2px 0; }
+  .log-req { color:var(--accent); }
+  .log-res { color:var(--green); }
+  .log-pub { color:var(--orange); }
+  .log-notify { color:var(--yellow); }
+  .log-rpc { color:var(--purple); }
+  .log-info { color:var(--muted); }
+
+  /* Metrics */
+  .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:12px 0; }
+  .metric { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center; }
+  .metric .value { font-size:1.4rem; font-weight:700; color:var(--accent); }
+  .metric .label { font-size:0.75rem; color:var(--muted); margin-top:4px; }
+
+  /* Comparison table */
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:0.85rem; }
+  th, td { padding:10px 12px; text-align:left; border-bottom:1px solid var(--border); }
+  th { color:var(--accent); font-weight:600; background:var(--bg); }
+  td { color:var(--text); }
+  tr:hover td { background:rgba(56,189,248,0.05); }
+
+  .tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600; }
+  .tag-blue { background:rgba(56,189,248,0.2); color:var(--accent); }
+  .tag-green { background:rgba(74,222,128,0.2); color:var(--green); }
+  .tag-purple { background:rgba(167,139,250,0.2); color:var(--purple); }
+
+  .info-box { background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); border-radius:8px; padding:14px; margin:12px 0; font-size:0.85rem; line-height:1.6; }
+
+  .scenario-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:10px 14px; background:rgba(251,191,36,0.08); border:1px dashed rgba(251,191,36,0.35); border-radius:8px; margin-bottom:12px; }
+  .scenario-bar strong { color:var(--yellow); font-size:0.85rem; margin-right:6px; }
+  .scenario-bar .btn { background:var(--yellow); color:var(--bg); }
+  .scenario-bar .btn:hover { filter:brightness(1.1); }
+</style>
+</head>
+<body>
+
+<h1>Simulasi <span>Model Komunikasi</span> Terdistribusi</h1>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('reqres')">Request-Response</button>
+  <button class="tab" onclick="showTab('pubsub')">Publish-Subscribe</button>
+  <button class="tab" onclick="showTab('rpc')">Remote Procedure Call</button>
+  <button class="tab" onclick="showTab('compare')">Perbandingan</button>
+</div>
+
+<!-- ============ REQUEST-RESPONSE ============ -->
+<div id="tab-reqres" class="panel active">
+  <div class="card">
+    <h2>Model Request-Response</h2>
+    <div class="info-box">
+      <strong>Cara Kerja:</strong> Client mengirim <em>request</em> ke Server, lalu Server memproses dan mengirim <em>response</em> kembali.
+      Model ini bersifat <strong>sinkron</strong> &mdash; client menunggu sampai response diterima sebelum melanjutkan.
+      Contoh dunia nyata: HTTP API, REST services, database queries.
+    </div>
+    <div class="scenario-bar">
+      <strong>Preset skenario:</strong>
+      <button class="btn btn-sm" onclick="presetRR('ecom')">E-commerce: Browse Products</button>
+      <button class="btn btn-sm" onclick="presetRR('iot')">IoT: Dashboard Query</button>
+    </div>
+
+    <h3>Konfigurasi Simulasi</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Client ID</label>
+        <input id="rr-client" value="Browser-App" />
+      </div>
+      <div class="form-group">
+        <label>Server ID</label>
+        <input id="rr-server" value="Catalog-API" />
+      </div>
+      <div class="form-group">
+        <label>Data Request</label>
+        <input id="rr-data" value="GET /products?category=electronics" />
+      </div>
+      <div class="form-group">
+        <label>Jumlah Request</label>
+        <input id="rr-count" type="number" value="3" min="1" max="10" />
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="runReqRes()">Jalankan Simulasi</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Visualisasi</h2>
+    <div class="canvas-wrap"><canvas id="canvas-rr" height="320"></canvas></div>
+    <div class="metrics" id="metrics-rr"></div>
+  </div>
+
+  <div class="card">
+    <h2>Log Interaksi</h2>
+    <div class="log-area" id="log-rr"><span class="log-info">Belum ada simulasi dijalankan...</span></div>
+  </div>
+</div>
+
+<!-- ============ PUBLISH-SUBSCRIBE ============ -->
+<div id="tab-pubsub" class="panel">
+  <div class="card">
+    <h2>Model Publish-Subscribe</h2>
+    <div class="info-box">
+      <strong>Cara Kerja:</strong> Publisher mengirim pesan ke sebuah <em>topic/channel</em>. Semua Subscriber yang terdaftar pada topic tersebut akan menerima notifikasi secara <strong>asinkron</strong>.
+      Publisher tidak perlu tahu siapa saja subscriber-nya (<em>loose coupling</em>).
+      Contoh dunia nyata: MQTT (IoT), Apache Kafka, Redis Pub/Sub, event bus.
+    </div>
+    <div class="scenario-bar">
+      <strong>Preset skenario:</strong>
+      <button class="btn btn-sm" onclick="presetPS('ecom')">E-commerce: Order Events</button>
+      <button class="btn btn-sm" onclick="presetPS('iot')">IoT: Sensor Broadcast</button>
+    </div>
+
+    <h3>Daftarkan Subscriber</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Subscriber ID</label>
+        <input id="ps-sub-id" value="inventory-service" />
+      </div>
+      <div class="form-group">
+        <label>Topic</label>
+        <input id="ps-sub-topic" value="orders.created" />
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-green btn-sm" onclick="addSubscriber()">+ Tambah Subscriber</button>
+      <button class="btn btn-sm" style="background:var(--border);color:var(--text)" onclick="bulkAddSubs()">+ Tambahkan Paket Subscriber Skenario</button>
+    </div>
+    <div id="sub-list" style="margin-top:12px; font-size:0.85rem; color:var(--muted);"></div>
+
+    <h3>Publish Pesan</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Publisher ID</label>
+        <input id="ps-pub-id" value="checkout-service" />
+      </div>
+      <div class="form-group">
+        <label>Topic</label>
+        <input id="ps-pub-topic" value="orders.created" />
+      </div>
+      <div class="form-group">
+        <label>Pesan</label>
+        <input id="ps-message" value="order_id=4871, total=750000, user=U-203" />
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-orange" onclick="runPubSub()">Publish Pesan</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Visualisasi</h2>
+    <div class="canvas-wrap"><canvas id="canvas-ps" height="350"></canvas></div>
+    <div class="metrics" id="metrics-ps"></div>
+  </div>
+
+  <div class="card">
+    <h2>Log Interaksi</h2>
+    <div class="log-area" id="log-ps"><span class="log-info">Belum ada simulasi dijalankan...</span></div>
+  </div>
+</div>
+
+<!-- ============ RPC ============ -->
+<div id="tab-rpc" class="panel">
+  <div class="card">
+    <h2>Model Remote Procedure Call (RPC)</h2>
+    <div class="info-box">
+      <strong>Cara Kerja:</strong> Caller memanggil prosedur/fungsi pada mesin remote seolah-olah memanggil fungsi lokal.
+      Proses melibatkan: <em>marshalling</em> parameter di client stub &rarr; pengiriman via jaringan &rarr; <em>unmarshalling</em> di server stub &rarr;
+      eksekusi &rarr; return hasil melalui jalur yang sama. Contoh dunia nyata: gRPC, XML-RPC, Java RMI.
+    </div>
+    <div class="scenario-bar">
+      <strong>Preset skenario:</strong>
+      <button class="btn btn-sm" onclick="presetRpc('validate_card')">E-commerce: Validate Card</button>
+      <button class="btn btn-sm" onclick="presetRpc('check_inventory')">E-commerce: Check Inventory</button>
+      <button class="btn btn-sm" onclick="presetRpc('calculate_shipping')">E-commerce: Calculate Shipping</button>
+      <button class="btn btn-sm" onclick="presetRpc('activate_alarm')">IoT: Activate Alarm</button>
+      <button class="btn btn-sm" onclick="presetRpc('read_sensor')">IoT: Read Sensor</button>
+    </div>
+
+    <h3>Konfigurasi Panggilan RPC</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Caller ID</label>
+        <input id="rpc-caller" value="checkout-service" />
+      </div>
+      <div class="form-group">
+        <label>Callee ID</label>
+        <input id="rpc-callee" value="payment-gateway" />
+      </div>
+      <div class="form-group">
+        <label>Prosedur</label>
+        <select id="rpc-proc">
+          <optgroup label="Generik">
+            <option value="add">add (penjumlahan)</option>
+            <option value="multiply">multiply (perkalian)</option>
+            <option value="concat">concat (gabung string)</option>
+            <option value="uppercase">uppercase (huruf besar)</option>
+            <option value="length">length (panjang string)</option>
+          </optgroup>
+          <optgroup label="E-commerce">
+            <option value="validate_card">validate_card (Luhn check)</option>
+            <option value="check_inventory">check_inventory (cek stok)</option>
+            <option value="calculate_shipping">calculate_shipping (ongkir)</option>
+          </optgroup>
+          <optgroup label="IoT">
+            <option value="activate_alarm">activate_alarm (aktifkan alarm zona)</option>
+            <option value="read_sensor">read_sensor (baca sensor)</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Argumen (pisah koma)</label>
+        <input id="rpc-args" value="4539148803436467" />
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-purple" onclick="runRpc()">Panggil RPC</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Visualisasi</h2>
+    <div class="canvas-wrap"><canvas id="canvas-rpc" height="380"></canvas></div>
+    <div class="metrics" id="metrics-rpc"></div>
+  </div>
+
+  <div class="card">
+    <h2>Log Interaksi</h2>
+    <div class="log-area" id="log-rpc"><span class="log-info">Belum ada simulasi dijalankan...</span></div>
+  </div>
+</div>
+
+<!-- ============ PERBANDINGAN ============ -->
+<div id="tab-compare" class="panel">
+  <div class="card">
+    <h2>Perbandingan Model Komunikasi</h2>
+    <div class="info-box">
+      Jalankan simulasi pada masing-masing model terlebih dahulu, lalu klik tombol di bawah untuk melihat perbandingan metrik secara langsung.
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="loadComparison()">Muat Perbandingan</button>
+      <button class="btn btn-red btn-sm" onclick="resetAll()">Reset Semua Data</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Tabel Perbandingan Metrik</h2>
+    <div style="overflow-x:auto;">
+      <table id="compare-table">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Rata-rata Latency</th>
+            <th>Total Pesan</th>
+            <th>Throughput</th>
+            <th>Urutan Pesan</th>
+            <th>Coupling</th>
+            <th>Skalabilitas</th>
+          </tr>
+        </thead>
+        <tbody id="compare-body">
+          <tr><td colspan="7" style="text-align:center;color:var(--muted)">Belum ada data. Jalankan simulasi terlebih dahulu.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Visualisasi Perbandingan</h2>
+    <div class="canvas-wrap"><canvas id="canvas-compare" height="300"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h2>Analisis Perbandingan</h2>
+    <div id="analysis-text" class="info-box" style="background:var(--bg);">
+      Jalankan simulasi dan muat perbandingan untuk melihat analisis otomatis.
+    </div>
+  </div>
+</div>
+
+<script>
+// ============ Tab switching ============
+function showTab(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ============ API helpers ============
+async function api(url, body) {
+  const opt = body ? { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) }
+                   : { method:'GET' };
+  const res = await fetch(url, opt);
+  return res.json();
+}
+
+// ============ Scenario presets ============
+// Mengisi form agar cepat men-demo skenario e-commerce / IoT sesuai laporan.
+const SCENARIO_PRESETS = {
+  rr: {
+    ecom: { client: 'Browser-App', server: 'Catalog-API', data: 'GET /products?category=electronics', count: 3 },
+    iot:  { client: 'Dashboard',   server: 'Gateway-IoT', data: 'GET /sensors/latest?zone=A',          count: 3 },
+  },
+  ps: {
+    ecom: {
+      pubId: 'checkout-service', topic: 'orders.created',
+      message: 'order_id=4871, total=750000, user=U-203',
+      subs: [
+        { id: 'inventory-service', topic: 'orders.created' },
+        { id: 'email-notifier',    topic: 'orders.created' },
+        { id: 'analytics-logger',  topic: 'orders.created' },
+      ],
+    },
+    iot: {
+      pubId: 'temp-sensor-lab-1', topic: 'sensor.temperature',
+      message: 'zone=lab-1, value=31.2C, ts=now',
+      subs: [
+        { id: 'dashboard-live',   topic: 'sensor.temperature' },
+        { id: 'alarm-controller', topic: 'sensor.temperature' },
+        { id: 'db-logger',        topic: 'sensor.temperature' },
+      ],
+    },
+  },
+  rpc: {
+    validate_card:      { caller: 'checkout-service', callee: 'payment-gateway', args: '4539148803436467' },
+    check_inventory:    { caller: 'order-service',    callee: 'warehouse',       args: 'SKU-42, 3' },
+    calculate_shipping: { caller: 'checkout-service', callee: 'logistics',       args: '2.5, 120' },
+    activate_alarm:     { caller: 'alarm-controller', callee: 'building-ctrl',   args: 'ZONE-A, high' },
+    read_sensor:        { caller: 'dashboard-live',   callee: 'gateway-IoT',     args: 'temp-sensor-lab-1' },
+    add:                { caller: 'AppClient', callee: 'MathServer', args: '10, 25, 5' },
+    multiply:           { caller: 'AppClient', callee: 'MathServer', args: '3, 4, 5' },
+    concat:             { caller: 'AppClient', callee: 'StringSrv',  args: 'Hello, World' },
+    uppercase:          { caller: 'AppClient', callee: 'StringSrv',  args: 'distributed, system' },
+    length:             { caller: 'AppClient', callee: 'StringSrv',  args: 'rabbitmq' },
+  },
+};
+
+function presetRR(kind) {
+  const p = SCENARIO_PRESETS.rr[kind];
+  document.getElementById('rr-client').value = p.client;
+  document.getElementById('rr-server').value = p.server;
+  document.getElementById('rr-data').value   = p.data;
+  document.getElementById('rr-count').value  = p.count;
+}
+
+function presetPS(kind) {
+  const p = SCENARIO_PRESETS.ps[kind];
+  document.getElementById('ps-pub-id').value    = p.pubId;
+  document.getElementById('ps-pub-topic').value = p.topic;
+  document.getElementById('ps-message').value   = p.message;
+  // First subscriber fields too, for convenience.
+  document.getElementById('ps-sub-id').value    = p.subs[0].id;
+  document.getElementById('ps-sub-topic').value = p.subs[0].topic;
+  // Remember the current preset so bulkAddSubs knows which pack to add.
+  window._psPreset = kind;
+}
+
+async function bulkAddSubs() {
+  const kind = window._psPreset || 'ecom';
+  const preset = SCENARIO_PRESETS.ps[kind];
+  for (const s of preset.subs) {
+    await api('/api/pubsub/subscribe', { subscriber_id: s.id, topic: s.topic });
+    if (!localSubs.find(x => x.id === s.id && x.topic === s.topic)) {
+      localSubs.push(s);
+    }
+  }
+  renderSubList();
+}
+
+function presetRpc(proc) {
+  const p = SCENARIO_PRESETS.rpc[proc];
+  if (!p) return;
+  document.getElementById('rpc-proc').value   = proc;
+  document.getElementById('rpc-caller').value = p.caller;
+  document.getElementById('rpc-callee').value = p.callee;
+  document.getElementById('rpc-args').value   = p.args;
+}
+
+// ============ REQUEST-RESPONSE ============
+async function runReqRes() {
+  const data = await api('/api/request-response', {
+    client_id: document.getElementById('rr-client').value,
+    server_id: document.getElementById('rr-server').value,
+    request_data: document.getElementById('rr-data').value,
+    num_requests: parseInt(document.getElementById('rr-count').value) || 1
+  });
+  renderRRLog(data);
+  renderRRCanvas(data);
+  renderMetrics('metrics-rr', data);
+}
+
+function renderRRLog(data) {
+  const el = document.getElementById('log-rr');
+  let html = '';
+  data.message_order.forEach((m, i) => {
+    const msg = data.messages[i];
+    const cls = msg.msg_type === 'request' ? 'log-req' : 'log-res';
+    html += `<div class="log-entry ${cls}">[${msg.timestamp}] ${m} (${msg.latency_ms.toFixed(1)}ms) - ${msg.content}</div>`;
+  });
+  html += `<div class="log-entry log-info">--- Total: ${data.total_time_ms.toFixed(2)}ms | Throughput: ${data.throughput.toFixed(1)} msg/s ---</div>`;
+  el.innerHTML = html;
+}
+
+function renderRRCanvas(data) {
+  const canvas = document.getElementById('canvas-rr');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = 320 * dpr;
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth, H = 320;
+  ctx.clearRect(0, 0, W, H);
+
+  const clientX = 120, serverX = W - 120;
+  const client = data.messages[0]?.from || 'Client';
+  const server = data.messages[0]?.to || 'Server';
+
+  // Draw nodes
+  drawNode(ctx, clientX, 40, client, '#38bdf8');
+  drawNode(ctx, serverX, 40, server, '#4ade80');
+
+  // Draw lifelines
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = '#334155';
+  ctx.beginPath();
+  ctx.moveTo(clientX, 70); ctx.lineTo(clientX, H - 20);
+  ctx.moveTo(serverX, 70); ctx.lineTo(serverX, H - 20);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw messages
+  const msgs = data.messages;
+  const gap = Math.min(40, (H - 100) / msgs.length);
+  msgs.forEach((msg, i) => {
+    const y = 90 + i * gap;
+    const isReq = msg.msg_type === 'request';
+    const fromX = isReq ? clientX : serverX;
+    const toX = isReq ? serverX : clientX;
+    const color = isReq ? '#38bdf8' : '#4ade80';
+    drawArrow(ctx, fromX, y, toX, y, color);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${msg.msg_type.toUpperCase()} (${msg.latency_ms.toFixed(1)}ms)`, (fromX + toX) / 2, y - 6);
+  });
+}
+
+// ============ PUBLISH-SUBSCRIBE ============
+let localSubs = [];
+
+function addSubscriber() {
+  const id = document.getElementById('ps-sub-id').value;
+  const topic = document.getElementById('ps-sub-topic').value;
+  api('/api/pubsub/subscribe', { subscriber_id: id, topic: topic }).then(res => {
+    if (!localSubs.find(s => s.id === id && s.topic === topic)) {
+      localSubs.push({ id, topic });
+    }
+    renderSubList();
+    // Auto-increment
+    const match = id.match(/^(.*?)(\d+)$/);
+    if (match) document.getElementById('ps-sub-id').value = match[1] + (parseInt(match[2]) + 1);
+  });
+}
+
+function renderSubList() {
+  const el = document.getElementById('sub-list');
+  if (!localSubs.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<strong style="color:var(--green)">Subscribers terdaftar:</strong><br>' +
+    localSubs.map(s => `<span class="tag tag-green">${s.id}</span> pada topic <span class="tag tag-blue">${s.topic}</span>`).join('<br>');
+}
+
+async function runPubSub() {
+  const data = await api('/api/pubsub/publish', {
+    publisher_id: document.getElementById('ps-pub-id').value,
+    topic: document.getElementById('ps-pub-topic').value,
+    message: document.getElementById('ps-message').value
+  });
+  renderPSLog(data);
+  renderPSCanvas(data);
+  renderMetrics('metrics-ps', data);
+}
+
+function renderPSLog(data) {
+  const el = document.getElementById('log-ps');
+  let html = '';
+  data.message_order.forEach((m, i) => {
+    const msg = data.messages[i];
+    const cls = msg.msg_type === 'publish' ? 'log-pub' : 'log-notify';
+    html += `<div class="log-entry ${cls}">[${msg.timestamp}] ${m} (${msg.latency_ms.toFixed(1)}ms) - ${msg.content}</div>`;
+  });
+  html += `<div class="log-entry log-info">--- Total: ${data.total_time_ms.toFixed(2)}ms | Throughput: ${data.throughput.toFixed(1)} msg/s | Subscribers notified: ${data.messages.length - 1} ---</div>`;
+  el.innerHTML = html;
+}
+
+function renderPSCanvas(data) {
+  const canvas = document.getElementById('canvas-ps');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = 350 * dpr;
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth, H = 350;
+  ctx.clearRect(0, 0, W, H);
+
+  const pubX = 100, brokerX = W / 2;
+  const publisher = data.messages[0]?.from || 'Publisher';
+  const topic = data.messages[0]?.to || 'Topic';
+  const subs = data.messages.slice(1);
+
+  // Publisher node
+  drawNode(ctx, pubX, 50, publisher, '#fb923c');
+  // Broker node
+  drawBroker(ctx, brokerX, 50, topic, '#fbbf24');
+
+  // Publisher -> Broker arrow
+  const msg0 = data.messages[0];
+  drawArrow(ctx, pubX + 50, 50, brokerX - 40, 50, '#fb923c');
+  ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(`PUBLISH (${msg0.latency_ms.toFixed(1)}ms)`, (pubX + brokerX) / 2, 40);
+
+  // Subscribers
+  if (subs.length > 0) {
+    const subStartY = 130;
+    const subGap = Math.min(60, (H - subStartY - 30) / subs.length);
+    subs.forEach((s, i) => {
+      const y = subStartY + i * subGap;
+      const subX = W - 140;
+      drawNode(ctx, subX, y, s.to, '#4ade80');
+      drawArrow(ctx, brokerX + 40, 70, subX - 50, y, '#fbbf24');
+      ctx.fillStyle = '#94a3b8'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText(`NOTIFY (${s.latency_ms.toFixed(1)}ms)`, brokerX + 50, (70 + y) / 2 - 4);
+    });
+  }
+}
+
+// ============ RPC ============
+async function runRpc() {
+  const args = document.getElementById('rpc-args').value.split(',').map(a => a.trim());
+  const data = await api('/api/rpc', {
+    caller_id: document.getElementById('rpc-caller').value,
+    callee_id: document.getElementById('rpc-callee').value,
+    procedure: document.getElementById('rpc-proc').value,
+    arguments: args
+  });
+  renderRPCLog(data);
+  renderRPCCanvas(data);
+  renderMetrics('metrics-rpc', data);
+}
+
+function renderRPCLog(data) {
+  const el = document.getElementById('log-rpc');
+  let html = '';
+  data.message_order.forEach((m, i) => {
+    const msg = data.messages[i];
+    html += `<div class="log-entry log-rpc">[${msg.timestamp}] ${m} (${msg.latency_ms.toFixed(1)}ms) - ${msg.content}</div>`;
+  });
+  html += `<div class="log-entry log-info">--- Total: ${data.total_time_ms.toFixed(2)}ms | Throughput: ${data.throughput.toFixed(1)} msg/s ---</div>`;
+  el.innerHTML = html;
+}
+
+function renderRPCCanvas(data) {
+  const canvas = document.getElementById('canvas-rpc');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = 380 * dpr;
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth, H = 380;
+  ctx.clearRect(0, 0, W, H);
+
+  const positions = [
+    { x: 80, label: 'Caller' },
+    { x: W * 0.3, label: 'Client Stub' },
+    { x: W * 0.55, label: 'Network' },
+    { x: W * 0.75, label: 'Server Stub' },
+    { x: W - 80, label: 'Callee' },
+  ];
+  const colors = ['#38bdf8', '#a78bfa', '#fbbf24', '#a78bfa', '#4ade80'];
+
+  // Draw nodes
+  positions.forEach((p, i) => {
+    drawNode(ctx, p.x, 35, p.label, colors[i]);
+    ctx.setLineDash([3, 3]); ctx.strokeStyle = '#334155';
+    ctx.beginPath(); ctx.moveTo(p.x, 65); ctx.lineTo(p.x, H - 10); ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // Draw steps
+  const steps = [
+    { from: 0, to: 1, label: 'MARSHAL', color: '#a78bfa' },
+    { from: 1, to: 3, label: 'SEND (network)', color: '#fbbf24' },
+    { from: 3, to: 4, label: 'UNMARSHAL', color: '#a78bfa' },
+    { from: 4, to: 4, label: 'EXECUTE', color: '#4ade80' },
+    { from: 3, to: 1, label: 'RETURN (network)', color: '#fbbf24' },
+    { from: 1, to: 0, label: 'RESULT', color: '#38bdf8' },
+  ];
+  const stepGap = Math.min(45, (H - 100) / steps.length);
+  steps.forEach((s, i) => {
+    const y = 85 + i * stepGap;
+    const msg = data.messages[i];
+    const fromX = positions[s.from].x;
+    const toX = positions[s.to].x;
+    if (fromX === toX) {
+      // Self-arrow (execute)
+      ctx.strokeStyle = s.color; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(fromX, y); ctx.lineTo(fromX + 30, y - 8); ctx.lineTo(fromX + 30, y + 8); ctx.closePath();
+      ctx.stroke();
+      ctx.fillStyle = '#94a3b8'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText(`${s.label} (${msg.latency_ms.toFixed(1)}ms)`, fromX + 35, y + 4);
+    } else {
+      drawArrow(ctx, fromX, y, toX, y, s.color);
+      ctx.fillStyle = '#94a3b8'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(`${s.label} (${msg.latency_ms.toFixed(1)}ms)`, (fromX + toX) / 2, y - 6);
+    }
+    ctx.lineWidth = 1;
+  });
+}
+
+// ============ COMPARISON ============
+async function loadComparison() {
+  const data = await api('/api/comparison');
+  if (!data.length) { alert('Belum ada data simulasi. Jalankan minimal satu simulasi terlebih dahulu.'); return; }
+
+  const body = document.getElementById('compare-body');
+  const tagClass = { 'Request-Response': 'tag-blue', 'Publish-Subscribe': 'tag-green', 'Remote Procedure Call': 'tag-purple' };
+  body.innerHTML = data.map(d => `
+    <tr>
+      <td><span class="tag ${tagClass[d.model] || ''}">${d.model}</span></td>
+      <td>${d.avg_latency_ms.toFixed(2)} ms</td>
+      <td>${d.total_messages}</td>
+      <td>${d.throughput.toFixed(1)} msg/s</td>
+      <td>${d.ordering_guarantee}</td>
+      <td>${d.coupling}</td>
+      <td>${d.scalability}</td>
+    </tr>
+  `).join('');
+
+  renderCompareChart(data);
+  renderAnalysis(data);
+}
+
+function renderCompareChart(data) {
+  const canvas = document.getElementById('canvas-compare');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = 300 * dpr;
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth, H = 300;
+  ctx.clearRect(0, 0, W, H);
+
+  const colors = { 'Request-Response': '#38bdf8', 'Publish-Subscribe': '#4ade80', 'Remote Procedure Call': '#a78bfa' };
+  const barW = 60;
+  const metrics = ['avg_latency_ms', 'throughput'];
+  const labels = ['Rata-rata Latency (ms)', 'Throughput (msg/s)'];
+  const groupW = W / metrics.length;
+
+  metrics.forEach((metric, gi) => {
+    const gx = gi * groupW + groupW / 2;
+    ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(labels[gi], gx, H - 8);
+
+    const maxVal = Math.max(...data.map(d => d[metric]), 1);
+    const totalBarsW = data.length * (barW + 10);
+    const startX = gx - totalBarsW / 2;
+
+    data.forEach((d, i) => {
+      const x = startX + i * (barW + 10);
+      const barH = (d[metric] / maxVal) * (H - 80);
+      const y = H - 35 - barH;
+
+      ctx.fillStyle = colors[d.model] || '#666';
+      ctx.beginPath();
+      roundRect(ctx, x, y, barW, barH, 4);
+      ctx.fill();
+
+      ctx.fillStyle = '#e2e8f0'; ctx.font = 'bold 11px sans-serif';
+      ctx.fillText(d[metric].toFixed(1), x + barW / 2, y - 8);
+      ctx.fillStyle = '#94a3b8'; ctx.font = '9px sans-serif';
+      const short = d.model.replace('Request-Response', 'Req-Res').replace('Publish-Subscribe', 'Pub-Sub').replace('Remote Procedure Call', 'RPC');
+      ctx.fillText(short, x + barW / 2, y - 20);
+    });
+  });
+}
+
+function renderAnalysis(data) {
+  const el = document.getElementById('analysis-text');
+  let html = '<strong>Analisis Otomatis:</strong><br><br>';
+
+  if (data.length < 2) {
+    html += 'Jalankan simulasi pada minimal 2 model berbeda untuk perbandingan lengkap.';
+    el.innerHTML = html; return;
+  }
+
+  const sorted = [...data].sort((a, b) => a.avg_latency_ms - b.avg_latency_ms);
+  html += `<strong>Latency terendah:</strong> ${sorted[0].model} (${sorted[0].avg_latency_ms.toFixed(2)} ms)<br>`;
+  html += `<strong>Latency tertinggi:</strong> ${sorted[sorted.length - 1].model} (${sorted[sorted.length - 1].avg_latency_ms.toFixed(2)} ms)<br><br>`;
+
+  const sortedTp = [...data].sort((a, b) => b.throughput - a.throughput);
+  html += `<strong>Throughput tertinggi:</strong> ${sortedTp[0].model} (${sortedTp[0].throughput.toFixed(1)} msg/s)<br><br>`;
+
+  html += '<strong>Kesimpulan:</strong><br>';
+  html += '- <strong>Request-Response</strong> cocok untuk komunikasi sinkron yang membutuhkan konfirmasi langsung (contoh: REST API).<br>';
+  html += '- <strong>Publish-Subscribe</strong> unggul dalam skalabilitas dan loose coupling, ideal untuk sistem event-driven dan IoT.<br>';
+  html += '- <strong>RPC</strong> memberikan abstraksi pemanggilan fungsi remote yang transparan, namun memiliki overhead marshalling/unmarshalling.<br>';
+
+  el.innerHTML = html;
+}
+
+async function resetAll() {
+  await api('/api/reset', {});
+  localSubs = [];
+  renderSubList();
+  document.getElementById('log-rr').innerHTML = '<span class="log-info">Data direset.</span>';
+  document.getElementById('log-ps').innerHTML = '<span class="log-info">Data direset.</span>';
+  document.getElementById('log-rpc').innerHTML = '<span class="log-info">Data direset.</span>';
+  document.getElementById('compare-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Data direset.</td></tr>';
+  document.getElementById('analysis-text').innerHTML = 'Data direset. Jalankan simulasi kembali.';
+  ['canvas-rr','canvas-ps','canvas-rpc','canvas-compare'].forEach(id => {
+    const c = document.getElementById(id); c.getContext('2d').clearRect(0, 0, c.width, c.height);
+  });
+  ['metrics-rr','metrics-ps','metrics-rpc'].forEach(id => { document.getElementById(id).innerHTML = ''; });
+}
+
+// ============ Shared rendering helpers ============
+function renderMetrics(elId, data) {
+  document.getElementById(elId).innerHTML = `
+    <div class="metric"><div class="value">${data.messages.length}</div><div class="label">Total Pesan</div></div>
+    <div class="metric"><div class="value">${data.total_time_ms.toFixed(1)}</div><div class="label">Total Waktu (ms)</div></div>
+    <div class="metric"><div class="value">${data.throughput.toFixed(1)}</div><div class="label">Throughput (msg/s)</div></div>
+    <div class="metric"><div class="value">${(data.messages.reduce((s,m) => s + m.latency_ms, 0) / data.messages.length).toFixed(1)}</div><div class="label">Avg Latency (ms)</div></div>
+  `;
+}
+
+function drawNode(ctx, x, y, label, color) {
+  ctx.fillStyle = color + '22'; ctx.strokeStyle = color; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(x, y, 25, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = color; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(label, x, y + 4);
+  ctx.lineWidth = 1;
+}
+
+function drawBroker(ctx, x, y, label, color) {
+  ctx.fillStyle = color + '22'; ctx.strokeStyle = color; ctx.lineWidth = 2;
+  roundRect(ctx, x - 40, y - 18, 80, 36, 8);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = color; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(label, x, y + 4);
+  ctx.lineWidth = 1;
+}
+
+function drawArrow(ctx, x1, y1, x2, y2, color) {
+  const headLen = 8, angle = Math.atan2(y2 - y1, x2 - x1);
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - headLen * Math.cos(angle - 0.4), y2 - headLen * Math.sin(angle - 0.4));
+  ctx.lineTo(x2 - headLen * Math.cos(angle + 0.4), y2 - headLen * Math.sin(angle + 0.4));
+  ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 1;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+</script>
+</body>
+</html>
